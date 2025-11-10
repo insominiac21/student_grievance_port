@@ -1,4 +1,4 @@
-import { useState} from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/shared/Navbar';
 import Footer from '../../components/shared/Footer';
@@ -91,6 +91,9 @@ const StudentDashboard = () => {
                 key={amenity.name}
                 className={`amenity-card ${amenity.className}`}
                 onClick={() => navigate(amenity.route)}
+                style={{ cursor: 'pointer', transition: 'transform 0.3s' }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-5px)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
               >
                 <i className={`fas ${amenity.icon} amenity-icon`}></i>
                 <h3>{amenity.name}</h3>
@@ -115,16 +118,66 @@ const StudentDashboard = () => {
         </div>
       </div>
 
-      {/* Chatbot Float */}
-      <button 
-        className="chatbot-float-btn" 
-        onClick={() => setShowChatbot(true)}
-        aria-label="Open help desk chatbot"
-      >
-        <i className="fas fa-robot"></i>
-      </button>
+      {/* Help Buttons */}
+      <div style={{
+        position: 'fixed',
+        bottom: '20px',
+        right: '20px',
+        zIndex: 999,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px'
+      }}>
+        {/* Chatbot Float Button */}
+        <button
+          onClick={() => setShowChatbot(true)}
+          style={{
+            width: '60px',
+            height: '60px',
+            borderRadius: '50%',
+            border: 'none',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: 'white',
+            fontSize: '24px',
+            cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
+            transition: 'transform 0.3s',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+        >
+          <i className="fas fa-robot"></i>
+        </button>
 
-      {/* Chatbot */}
+        {/* FAQ Button */}
+        <button
+          onClick={() => setShowFAQ(!showFAQ)}
+          style={{
+            width: '60px',
+            height: '60px',
+            borderRadius: '50%',
+            border: 'none',
+            background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            color: 'white',
+            fontSize: '24px',
+            cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(245, 87, 108, 0.3)',
+            transition: 'transform 0.3s',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+        >
+          <i className="fas fa-comments"></i>
+        </button>
+      </div>
+
+      {/* Chatbot Component */}
       <Chatbot isOpen={showChatbot} onClose={() => setShowChatbot(false)} />
 
       {/* FAQ Modal */}

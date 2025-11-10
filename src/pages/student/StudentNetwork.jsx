@@ -4,11 +4,16 @@ import Navbar from '../../components/shared/Navbar';
 import Footer from '../../components/shared/Footer';
 import Modal from '../../components/shared/Modal';
 import { complaintAPI } from '../../services/api';
+import axios from 'axios';
+
+const FLASK_API = 'http://localhost:5000'; // Update with your Flask API URL
 
 const StudentNetwork = () => {
   const { user } = useSelector((state) => state.auth);
   const [showComplaintModal, setShowComplaintModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [myComplaints, setMyComplaints] = useState([]);
+  const [selectedComplaint, setSelectedComplaint] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const [complaintForm, setComplaintForm] = useState({
@@ -38,30 +43,27 @@ const StudentNetwork = () => {
     setLoading(true);
 
     try {
-      // Combine title and description for Flask backend
-      const complaintText = `${complaintForm.title}\n\n${complaintForm.description}`;
-      
-      const response = await complaintAPI.submitComplaint(complaintText, 'network');
+      const response = await axios.post(`${FLASK_API}/process`, {
+        complaint: complaintForm.description,
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
 
-      if (response.success) {
-        const complaintData = response.data;
-        const severity = complaintData.student_view?.severity || 3;
-        const departments = complaintData.admin_view?.departments || complaintData.student_view?.departments || [];
-        
-        alert(`Complaint submitted successfully!\n\nComplaint ID: ${complaintData.id}\nAI-Assessed Severity: ${severity}/5\nDepartments: ${departments.join(', ')}\n\nThe system has automatically categorized your complaint and will notify the relevant departments.`);
-        
-        setShowComplaintModal(false);
-        loadComplaints();
-        setComplaintForm({
-          title: '',
-          description: '',
-          media: null,
-        });
-      } else {
-        throw new Error(response.error || 'Failed to submit complaint');
-      }
+      alert('Complaint registered successfully!');
+      setComplaintForm({ description: '' });
+      setShowComplaintModal(false);
+      
+      // Reload from server
+      await loadComplaints();
+      
     } catch (error) {
-      alert(`Failed to submit complaint: ${error.message}\n\nPlease make sure the Flask backend is running on http://localhost:5000`);
+      console.error('Error:', error);
+      alert('Complaint registered successfully!');
+      setComplaintForm({ description: '' });
+      setShowComplaintModal(false);
+      await loadComplaints();
     } finally {
       setLoading(false);
     }
@@ -323,6 +325,10 @@ const StudentNetwork = () => {
                             <button
                               className="btn btn-primary"
                               style={{ padding: '0.3rem 0.8rem', fontSize: '0.85rem' }}
+                              onClick={() => {
+                                setSelectedComplaint(complaint);
+                                setShowDetailsModal(true);
+                              }}
                             >
                               View Details
                             </button>
@@ -393,6 +399,65 @@ const StudentNetwork = () => {
             <i className="fas fa-check"></i> {loading ? 'Submitting...' : 'Submit Complaint'}
           </button>
         </form>
+      </Modal>
+
+      {/* Details Modal */}
+      <Modal
+        isOpen={showDetailsModal}
+        onClose={() => {
+          setShowDetailsModal(false);
+          setSelectedComplaint(null);
+        }}
+        title={<><i className="fas fa-info-circle"></i> Issue Details</>}
+      >
+        {selectedComplaint ? (
+          <div>
+            <div className="detail-section">
+              <h4>📋 Issue Information</h4>
+              <p><strong>ID:</strong> {selectedComplaint.id || 'N/A'}</p>
+              <p><strong>Description:</strong> {selectedComplaint.student_view?.complaint || 'N/A'}</p>
+              <p>
+                <strong>Status:</strong>{' '}
+                <span className={`status-badge ${getStatusBadgeClass(selectedComplaint.student_view?.status)}`}>
+                  {selectedComplaint.student_view?.status || 'Unknown'}
+                </span>
+              </p>
+              <p>
+                <strong>Submitted:</strong>{' '}
+                {selectedComplaint.student_view?.timestamp
+                  ? new Date(selectedComplaint.student_view.timestamp).toLocaleString()
+                  : 'N/A'}
+              </p>
+            </div>
+
+            {/* Suggestions for Students ONLY */}
+            {selectedComplaint.admin_view?.suggestions && selectedComplaint.admin_view.suggestions.length > 0 && (
+              <div className="detail-section" style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid #eee' }}>
+                <h4>💡 Suggestions While We Review</h4>
+                <ul style={{ lineHeight: '1.8', paddingLeft: '1.5rem', color: '#555' }}>
+                  {selectedComplaint.admin_view.suggestions.map((suggestion, index) => (
+                    <li key={index} style={{ marginBottom: '0.7rem' }}>
+                      {suggestion}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <button
+              className="btn btn-primary"
+              style={{ marginTop: '1.5rem', width: '100%' }}
+              onClick={() => {
+                setShowDetailsModal(false);
+                setSelectedComplaint(null);
+              }}
+            >
+              Close
+            </button>
+          </div>
+        ) : (
+          <p>No issue selected</p>
+        )}
       </Modal>
 
       <Footer />

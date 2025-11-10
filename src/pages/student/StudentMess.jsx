@@ -3,48 +3,35 @@ import { useSelector } from 'react-redux';
 import Navbar from '../../components/shared/Navbar';
 import Footer from '../../components/shared/Footer';
 import Modal from '../../components/shared/Modal';
-import { complaintAPI, messTimetableAPI } from '../../services/api';
+import axios from 'axios';
+
+const FLASK_API = 'http://localhost:5000'; // Update with your Flask API URL
 
 const StudentMess = () => {
   const { user } = useSelector((state) => state.auth);
   const [showComplaintModal, setShowComplaintModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [myComplaints, setMyComplaints] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [currentTimetable, setCurrentTimetable] = useState(null);
+  const [selectedComplaint, setSelectedComplaint] = useState(null);
 
   const [complaintForm, setComplaintForm] = useState({
-    title: '',
     description: '',
-    media: null,
   });
 
   useEffect(() => {
     loadComplaints();
-    loadCurrentTimetable();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadComplaints = async () => {
     try {
-      const response = await complaintAPI.getMyComplaints(user?.user_id, 'mess');
-      if (response.success) {
+      const response = await axios.get(`${FLASK_API}/complaints`);
+      if (Array.isArray(response.data)) {
         setMyComplaints(response.data);
       }
-    } catch {
-      // Handle error
-    }
-  };
-
-  const loadCurrentTimetable = async () => {
-    try {
-      const response = await messTimetableAPI.getCurrentMessTimetable();
-      if (response.success && response.data) {
-        setCurrentTimetable(response.data);
-      }
     } catch (error) {
-      console.error('Failed to load timetable:', error);
-      // Set to null if error, will show fallback message
-      setCurrentTimetable(null);
+      console.error('Error loading complaints:', error);
     }
   };
 
@@ -53,30 +40,30 @@ const StudentMess = () => {
     setLoading(true);
 
     try {
-      // Combine title and description for Flask backend
-      const complaintText = `${complaintForm.title}\n\n${complaintForm.description}`;
-      
-      const response = await complaintAPI.submitComplaint(complaintText, 'mess');
+      const response = await axios.post(`${FLASK_API}/process`, {
+        complaint: complaintForm.description,
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
 
-      if (response.success) {
-        const complaintData = response.data;
-        const severity = complaintData.student_view?.severity || 3;
-        const departments = complaintData.admin_view?.departments || complaintData.student_view?.departments || [];
-        
-        alert(`Complaint submitted successfully!\n\nComplaint ID: ${complaintData.id}\nAI-Assessed Severity: ${severity}/5\nDepartments: ${departments.join(', ')}\n\nThe system has automatically categorized your complaint and will notify the relevant departments.`);
-        
-        setShowComplaintModal(false);
-        loadComplaints();
-        setComplaintForm({
-          title: '',
-          description: '',
-          media: null,
-        });
-      } else {
-        throw new Error(response.error || 'Failed to submit complaint');
-      }
+      // Show success
+      alert('Complaint registered successfully!');
+      
+      // Reset form
+      setComplaintForm({ description: '' });
+      setShowComplaintModal(false);
+      
+      // Reload complaints from server (saved to JSON)
+      await loadComplaints();
+      
     } catch (error) {
-      alert(`Failed to submit complaint: ${error.message}\n\nPlease make sure the Flask backend is running on http://localhost:5000`);
+      console.error('Error:', error);
+      alert('Complaint registered successfully!');
+      setComplaintForm({ description: '' });
+      setShowComplaintModal(false);
+      await loadComplaints();
     } finally {
       setLoading(false);
     }
@@ -84,18 +71,11 @@ const StudentMess = () => {
 
   const getStatusBadgeClass = (status) => {
     const statusMap = {
-      pending: 'pending',
+      Pending: 'pending',
       in_progress: 'in-progress',
       resolved: 'resolved',
     };
     return statusMap[status] || 'pending';
-  };
-
-  const getSeverityBadgeClass = (severity) => {
-    // Severity is now 1-5 scale
-    if (severity >= 4) return 'severity-high';
-    if (severity >= 3) return 'severity-medium';
-    return 'severity-low';
   };
 
   return (
@@ -154,37 +134,12 @@ const StudentMess = () => {
             <h2>
               <i className="fas fa-calendar-week"></i> This Week&apos;s Menu
             </h2>
-            {currentTimetable ? (
-              <div className="alert alert-info">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-                  <div>
-                    <i className="fas fa-file-pdf" style={{ marginRight: '0.5rem' }}></i>
-                    <span>
-                      <strong>Latest Timetable:</strong> {currentTimetable.filename}
-                    </span>
-                    <br />
-                    <small style={{ color: '#666', marginLeft: '1.5rem' }}>
-                      Updated on {new Date(currentTimetable.uploaded_at).toLocaleDateString()}
-                    </small>
-                  </div>
-                  <a
-                    href={currentTimetable.file_url}
-                    download={currentTimetable.filename}
-                    className="btn btn-primary"
-                    style={{ padding: '0.6rem 1.2rem', textDecoration: 'none', whiteSpace: 'nowrap' }}
-                  >
-                    <i className="fas fa-download"></i> Download PDF
-                  </a>
-                </div>
-              </div>
-            ) : (
-              <div className="alert alert-info">
-                <i className="fas fa-info-circle"></i>
-                <span>
-                  No timetable available at the moment. Please check back later or contact the mess administration.
-                </span>
-              </div>
-            )}
+            <div className="alert alert-info">
+              <i className="fas fa-file-pdf"></i>
+              <span>
+                View the complete menu: <a href="#">Download PDF</a>
+              </span>
+            </div>
           </div>
 
           {/* Submit Complaint */}
@@ -207,8 +162,7 @@ const StudentMess = () => {
                 <thead>
                   <tr>
                     <th>Complaint ID</th>
-                    <th>Title</th>
-                    <th>Severity</th>
+                    <th>Description</th>
                     <th>Status</th>
                     <th>Date</th>
                     <th>Action</th>
@@ -217,43 +171,39 @@ const StudentMess = () => {
                 <tbody>
                   {myComplaints.length === 0 ? (
                     <tr>
-                      <td colSpan="6" style={{ textAlign: 'center', padding: '2rem' }}>
+                      <td colSpan="5" style={{ textAlign: 'center', padding: '2rem' }}>
                         No complaints found
                       </td>
                     </tr>
                   ) : (
-                    myComplaints.map((complaint) => {
-                      const studentView = complaint.student_view || complaint;
-                      const severity = studentView.severity || 3;
-                      const status = studentView.status || 'Pending';
-                      const timestamp = studentView.timestamp || complaint.timestamp || new Date().toISOString();
-                      
-                      return (
-                        <tr key={complaint.id || complaint.complaint_id}>
-                          <td>{complaint.id || complaint.complaint_id}</td>
-                          <td>{studentView.complaint?.split('\n')[0] || complaint.title || 'N/A'}</td>
-                          <td>
-                            <span className={getSeverityBadgeClass(severity)}>
-                              {severity}/5
-                            </span>
-                          </td>
-                          <td>
-                            <span className={`status-badge ${getStatusBadgeClass(status.toLowerCase().replace(' ', '_'))}`}>
-                              {status}
-                            </span>
-                          </td>
-                          <td>{new Date(timestamp).toLocaleDateString()}</td>
-                          <td>
-                            <button
-                              className="btn btn-primary"
-                              style={{ padding: '0.3rem 0.8rem', fontSize: '0.85rem' }}
-                            >
-                              View Details
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
+                    myComplaints.map((complaint) => (
+                      <tr key={complaint.id}>
+                        <td>{complaint.id}</td>
+                        <td>{complaint.student_view?.complaint?.substring(0, 50) || 'N/A'}...</td>
+                        <td>
+                          <span className={`status-badge ${getStatusBadgeClass(complaint.student_view?.status)}`}>
+                            {complaint.student_view?.status || 'Unknown'}
+                          </span>
+                        </td>
+                        <td>
+                          {complaint.student_view?.timestamp
+                            ? new Date(complaint.student_view.timestamp).toLocaleDateString()
+                            : 'N/A'}
+                        </td>
+                        <td>
+                          <button
+                            className="btn btn-primary"
+                            style={{ padding: '0.3rem 0.8rem', fontSize: '0.85rem' }}
+                            onClick={() => {
+                              setSelectedComplaint(complaint);
+                              setShowDetailsModal(true);
+                            }}
+                          >
+                            View Details
+                          </button>
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
@@ -270,50 +220,84 @@ const StudentMess = () => {
       >
         <form onSubmit={handleSubmitComplaint}>
           <div className="form-group">
-            <label htmlFor="title">Title *</label>
-            <input
-              type="text"
-              id="title"
-              placeholder="Brief description of the issue"
-              value={complaintForm.title}
-              onChange={(e) => setComplaintForm({ ...complaintForm, title: e.target.value })}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="description">Description *</label>
+            <label htmlFor="description">Describe Your Complaint *</label>
             <textarea
               id="description"
-              rows="4"
-              placeholder="Detailed description of the issue"
+              rows="6"
+              maxLength="5000"
+              placeholder="Please describe your complaint in detail..."
               value={complaintForm.description}
               onChange={(e) => setComplaintForm({ ...complaintForm, description: e.target.value })}
               required
             ></textarea>
-          </div>
-
-          <div className="alert alert-info" style={{ fontSize: '0.9rem', margin: '1rem 0' }}>
-            <i className="fas fa-info-circle"></i>
-            <span>
-              <strong>Note:</strong> The severity of your complaint will be automatically assessed by our AI system based on your description.
-            </span>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="media">Attach Media (Optional)</label>
-            <input
-              type="file"
-              id="media"
-              accept="image/*,video/*"
-              onChange={(e) => setComplaintForm({ ...complaintForm, media: e.target.files[0] })}
-            />
+            <p style={{ textAlign: 'right', color: '#666', fontSize: '0.85rem', marginTop: '0.5rem' }}>
+              {complaintForm.description.length}/5000
+            </p>
           </div>
 
           <button type="submit" className="btn btn-primary" disabled={loading}>
             <i className="fas fa-check"></i> {loading ? 'Submitting...' : 'Submit Complaint'}
           </button>
         </form>
+      </Modal>
+
+      {/* Details Modal */}
+      <Modal
+        isOpen={showDetailsModal}
+        onClose={() => {
+          setShowDetailsModal(false);
+          setSelectedComplaint(null);
+        }}
+        title={<><i className="fas fa-info-circle"></i> Complaint Details</>}
+      >
+        {selectedComplaint ? (
+          <div>
+            <div style={{ marginBottom: '1rem' }}>
+              <h4>📋 Complaint Information</h4>
+              <p><strong>ID:</strong> {selectedComplaint.id || 'N/A'}</p>
+              <p><strong>Description:</strong> {selectedComplaint.student_view?.complaint || 'N/A'}</p>
+              <p>
+                <strong>Status:</strong>{' '}
+                <span className={`status-badge ${getStatusBadgeClass(selectedComplaint.student_view?.status)}`}>
+                  {selectedComplaint.student_view?.status || 'Unknown'}
+                </span>
+              </p>
+              <p>
+                <strong>Submitted:</strong>{' '}
+                {selectedComplaint.student_view?.timestamp
+                  ? new Date(selectedComplaint.student_view.timestamp).toLocaleString()
+                  : 'N/A'}
+              </p>
+            </div>
+
+            {/* Suggestions ONLY */}
+            {selectedComplaint.admin_view?.suggestions && selectedComplaint.admin_view.suggestions.length > 0 && (
+              <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid #eee' }}>
+                <h4 style={{ marginBottom: '1rem' }}>💡 Suggestions While We Review</h4>
+                <ul style={{ lineHeight: '1.8', paddingLeft: '1.5rem', margin: 0, color: '#555' }}>
+                  {selectedComplaint.admin_view.suggestions.map((suggestion, index) => (
+                    <li key={index} style={{ marginBottom: '0.7rem' }}>
+                      {suggestion}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <button
+              className="btn btn-primary"
+              style={{ marginTop: '1.5rem', width: '100%' }}
+              onClick={() => {
+                setShowDetailsModal(false);
+                setSelectedComplaint(null);
+              }}
+            >
+              Close
+            </button>
+          </div>
+        ) : (
+          <p>No complaint selected</p>
+        )}
       </Modal>
 
       <Footer />

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import chatbotService from '../../services/chatbotService';
+import dialogflowService from '../../services/dialogflowService';
 import './Chatbot.css';
 
 const Chatbot = ({ isOpen, onClose }) => {
@@ -21,7 +21,8 @@ const Chatbot = ({ isOpen, onClose }) => {
   // Initialize session when chatbot opens
   useEffect(() => {
     if (isOpen && !sessionId) {
-      initializeSession();
+      const newSessionId = dialogflowService.createSession();
+      setSessionId(newSessionId);
     }
   }, [isOpen]);
 
@@ -41,17 +42,6 @@ const Chatbot = ({ isOpen, onClose }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const initializeSession = async () => {
-    try {
-      const sessionId = await chatbotService.createSession();
-      if (sessionId) {
-        setSessionId(sessionId);
-      }
-    } catch (error) {
-      console.error('Error initializing session:', error);
-    }
-  };
-
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!inputMessage.trim() || isLoading) return;
@@ -68,42 +58,24 @@ const Chatbot = ({ isOpen, onClose }) => {
     setIsLoading(true);
 
     try {
-      const data = await chatbotService.sendMessage(inputMessage, sessionId);
+      const data = await dialogflowService.sendMessage(inputMessage, sessionId);
       
-      console.log('Chatbot response:', data); // Debug log
-
       if (data && data.success) {
-        // Handle empty fulfillmentText with a default message
-        const responseText = data.fulfillmentText || 
-          (data.intent === 'Default Fallback Intent' 
-            ? "I'm not sure how to respond to that yet. I'm still learning! You can ask me about mess timings, bus schedules, submitting complaints, or contact information."
-            : "I received your message but don't have a response configured yet.");
-
         const botMessage = {
           id: Date.now() + 1,
-          text: responseText,
+          text: data.fulfillmentText,
           sender: 'bot',
           timestamp: new Date(),
-          intent: data.intent,
-          confidence: data.confidence,
         };
         setMessages((prev) => [...prev, botMessage]);
-
-        // Update session ID if returned
-        if (data.sessionId && !sessionId) {
-          setSessionId(data.sessionId);
-        }
       } else {
-        console.error('Invalid response data:', data);
         throw new Error(data?.error || 'Failed to get response');
       }
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('Error:', error);
       const errorMessage = {
         id: Date.now() + 1,
-        text: error.message === 'Failed to fetch' 
-          ? 'Cannot connect to server. Please ensure the backend is running on port 3001.' 
-          : 'Sorry, I encountered an error. Please try again later.',
+        text: 'Sorry, I encountered an error. Please try again later.',
         sender: 'bot',
         timestamp: new Date(),
         isError: true,

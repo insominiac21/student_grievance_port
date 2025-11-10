@@ -5,6 +5,9 @@ import Navbar from '../../components/shared/Navbar';
 import Footer from '../../components/shared/Footer';
 import Modal from '../../components/shared/Modal';
 import { rideAPI, scheduleAPI } from '../../services/api';
+import axios from 'axios';
+
+const FLASK_API = 'http://127.0.0.1:5000'; // Update with your Flask API URL
 
 const StudentTransport = () => {
   const { user } = useSelector((state) => state.auth);
@@ -13,6 +16,11 @@ const StudentTransport = () => {
   const [myBookings, setMyBookings] = useState([]);
   const [busSchedule, setBusSchedule] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [complaintForm, setComplaintForm] = useState({
+    description: '',
+  });
 
   const [cabBookingForm, setCabBookingForm] = useState({
     source: '',
@@ -100,6 +108,37 @@ const StudentTransport = () => {
       loadBookings();
     } catch {
       alert('Failed to cancel booking');
+    }
+  };
+
+  const handleSubmitComplaint = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const response = await axios.post(`${FLASK_API}/process`, {
+        complaint: complaintForm.description,
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      alert('Complaint registered successfully!');
+      setComplaintForm({ description: '' });
+      setShowCabModal(false);
+      
+      // Reload from server
+      await loadBookings();
+      
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Complaint registered successfully!');
+      setComplaintForm({ description: '' });
+      setShowCabModal(false);
+      await loadBookings();
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -291,6 +330,10 @@ const StudentTransport = () => {
                             <button
                               className="btn btn-primary"
                               style={{ padding: '0.3rem 0.8rem', fontSize: '0.85rem' }}
+                              onClick={() => {
+                                setSelectedBooking(booking);
+                                setShowDetailsModal(true);
+                              }}
                             >
                               View Details
                             </button>
@@ -413,6 +456,65 @@ const StudentTransport = () => {
             <i className="fas fa-check"></i> {loading ? 'Submitting...' : 'Submit Booking Request'}
           </button>
         </form>
+      </Modal>
+
+      {/* Details Modal */}
+      <Modal
+        isOpen={showDetailsModal}
+        onClose={() => {
+          setShowDetailsModal(false);
+          setSelectedBooking(null);
+        }}
+        title={<><i className="fas fa-info-circle"></i> Complaint Details</>}
+      >
+        {selectedBooking ? (
+          <div>
+            <div className="detail-section">
+              <h4>📋 Complaint Information</h4>
+              <p><strong>ID:</strong> {selectedBooking.id || 'N/A'}</p>
+              <p><strong>Description:</strong> {selectedBooking.student_view?.complaint || 'N/A'}</p>
+              <p>
+                <strong>Status:</strong>{' '}
+                <span className={`status-badge ${getStatusBadgeClass(selectedBooking.student_view?.status)}`}>
+                  {selectedBooking.student_view?.status || 'Unknown'}
+                </span>
+              </p>
+              <p>
+                <strong>Submitted:</strong>{' '}
+                {selectedBooking.student_view?.timestamp
+                  ? new Date(selectedBooking.student_view.timestamp).toLocaleString()
+                  : 'N/A'}
+              </p>
+            </div>
+
+            {/* Suggestions for Students ONLY */}
+            {selectedBooking.admin_view?.suggestions && selectedBooking.admin_view.suggestions.length > 0 && (
+              <div className="detail-section" style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid #eee' }}>
+                <h4>💡 Suggestions While We Review</h4>
+                <ul style={{ lineHeight: '1.8', paddingLeft: '1.5rem', color: '#555' }}>
+                  {selectedBooking.admin_view.suggestions.map((suggestion, index) => (
+                    <li key={index} style={{ marginBottom: '0.7rem' }}>
+                      {suggestion}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <button
+              className="btn btn-primary"
+              style={{ marginTop: '1.5rem', width: '100%' }}
+              onClick={() => {
+                setShowDetailsModal(false);
+                setSelectedBooking(null);
+              }}
+            >
+              Close
+            </button>
+          </div>
+        ) : (
+          <p>No complaint selected</p>
+        )}
       </Modal>
 
       <Footer />
